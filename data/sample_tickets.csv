@@ -1,0 +1,21 @@
+id,customer_tier,subject,description
+1,Enterprise,URGENT: Production API returning 500,"Since 08:00 UTC, all requests to the /auth endpoint are failing with a 500 error. This is blocking our entire dev team."
+2,Free,How do I change my password?,I looked in the settings but I can't find the 'reset password' button. Help?
+3,Gold,Latency spikes in Tokyo region,We are seeing 2s+ response times for users in Japan. Our dashboard shows everything green but users are complaining.
+4,Enterprise,Incorrect charge on March Invoice,"Our contract says $5k/mo, but we were billed $7,500. This needs to be corrected before EOD for accounting."
+5,Silver,Feature Request: Dark Mode,My team works late and the white background is killing our eyes. When is dark mode coming?
+6,Gold,Potential security vulnerability,I found a way to see other users' email addresses in the URL parameters. This is a massive hole.
+7,Silver,"System is ""slow""",Everything just feels laggy today. Not sure why. Fix it?
+8,Enterprise,SSO Integration failing for new hires,"Existing users can login, but any new user added to Okta today gets a ""User not found"" error in your app."
+9,Free,Close my account,I don't use this anymore. Delete everything.
+10,Gold,Bug in CSV Export,"When I export my monthly report, the 'Date' column is formatted as a string and breaks my Excel macros."
+11,Enterprise,[REOPENED] Issue still persists,"You said the fix for the login bug was deployed, but it's still happening for 10% of our users. This is the 3rd time."
+12,Silver,Documentation is wrong,"The API docs for /v2/orders say 'price' is a float, but the API is returning a string."
+13,Enterprise,CEO cannot access account,Our CEO is trying to give a demo right now and is locked out. FIX THIS NOW.
+14,Free,Just wanted to say thanks!,Your support team helped me out yesterday and they were great. No issue here.
+15,Gold,Integration with Slack?,Do you guys have a Slack app? I couldn't find it in the marketplace.
+16,Silver,Payment failed twice,I tried to upgrade my plan but my corporate card was declined. I called the bank and they said it's on your end.
+17,Enterprise,Performance degradation during peak hours,"Every day at 9 AM EST, the app becomes unusable for 15 minutes. We need an RCA."
+18,Gold,White-labeling options,Can we remove your logo from the customer portal? We are a Gold partner.
+19,Free,API key not working,I keep getting 'Unauthorized' even though I just generated the key.
+20,Silver,Site is down?,I'm getting a 404 on your homepage. Is there an outage?
