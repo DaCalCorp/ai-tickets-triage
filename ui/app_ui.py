@@ -10,31 +10,20 @@ st.markdown("""
     <style>
     .stApp { background-color: #0d1117; }
     
-    /* Panel Containers */
-    .ticket-item {
-        padding: 10px;
-        border-bottom: 1px solid #30363d;
-        cursor: pointer;
-        transition: 0.2s;
-    }
-    .ticket-item:hover { background-color: #161b22; }
-    
-    .active-ticket {
-        background-color: #1f2937 !important;
-        border-left: 4px solid #3b82f6;
+    /* Panel Styling */
+    [data-testid="column"] {
+        background-color: #161b22;
+        padding: 15px;
+        border-radius: 10px;
+        border: 1px solid #30363d;
+        min-height: 85vh;
     }
 
     /* Text Colors */
     h1, h2, h3, p, span, label { color: #c9d1d9 !important; }
-    .subject-small { font-size: 14px; font-weight: 600; display: block; }
-    .id-small { font-size: 10px; color: #8b949e; }
     
-    /* Priority Dots */
-    .dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
-    .urgent-dot { background-color: #f85149; }
-    .high-dot { background-color: #f0883e; }
-    .medium-dot { background-color: #d2a8ff; }
-    .low-dot { background-color: #8b949e; }
+    /* Sidebar Radio Styling */
+    div[data-testid="stRadio"] > label { font-weight: bold; color: #58a6ff !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -51,68 +40,75 @@ def get_data():
 
 df = get_data()
 
-# --- 3. THE THREE-PANEL LAYOUT ---
 if df.empty:
     st.warning("No data found. Run classifier.py.")
 else:
-    # Sidebar-style Left Panel (Navigation)
-    col_nav, col_content, col_actions = st.columns([1, 2, 1])
+    # --- 3. THE THREE-PANEL ARCHITECTURE ---
+    # Col 1: Priority Picker | Col 2: Ticket List | Col 3: Details & Actions
+    col_priority, col_list, col_detail = st.columns([0.8, 1.5, 2.2])
 
-    with col_nav:
-        st.markdown("### 📥 Queue")
-        search = st.text_input("", placeholder="Search...", label_visibility="collapsed")
-        
-        # Filtering navigation list
-        nav_df = df[df['subject'].str.contains(search, case=False)] if search else df
-        
-        # Selection Logic (Simulating a click)
-        ticket_list = nav_df['subject'].tolist()
-        selected_subject = st.radio("Select a ticket", ticket_list, label_visibility="collapsed")
-        
-        # Get the full data for the selected ticket
-        selected_ticket = df[df['subject'] == selected_subject].iloc[0]
-
-    with col_content:
-        st.markdown(f"### 📄 Ticket #{selected_ticket['ticket_id']}")
-        st.markdown(f"## {selected_ticket['subject']}")
-        
-        st.info(f"**Description:**\n\n{selected_ticket['description']}")
-        
-        with st.container():
-            st.markdown("#### 🤖 AI Insights")
-            st.write(f"**Sentiment:** {selected_ticket['sentiment']}")
-            st.write(f"**Reasoning:** {selected_ticket['reasoning']}")
-            st.progress(int(selected_ticket['confidence'])/100, text=f"Confidence: {selected_ticket['confidence']}%")
-
-    with col_actions:
-        st.markdown("### 🛠️ Actions")
-        st.write("Review and verify the triage.")
-        
-        priority_options = ["low", "medium", "high", "urgent"]
-        team_options = ["Support", "SRE", "Billing", "Dev", "Security Operations"]
-        
-        # Normalization
-        curr_p = str(selected_ticket['priority']).lower().strip()
-        p_idx = priority_options.index(curr_p) if curr_p in priority_options else 0
-        
-        new_p = st.selectbox("Confirm Priority", priority_options, index=p_idx)
-        
-        curr_t = str(selected_ticket['assigned_team']).strip()
-        t_idx = team_options.index(curr_t) if curr_t in team_options else 0
-        
-        new_t = st.selectbox("Confirm Assignee", team_options, index=t_idx)
+    # --- PANE 1: PRIORITY SELECTOR ---
+    with col_priority:
+        st.markdown("### 🏷️ Priority")
+        all_priorities = ["Urgent", "High", "Medium", "Low"]
+        selected_p = st.radio("Select Level", all_priorities, label_visibility="collapsed")
         
         st.divider()
-        
-        if st.button("✅ Verify & Next", use_container_width=True):
-            conn = sqlite3.connect(DB_PATH)
-            conn.execute("UPDATE ai_predictions SET priority=?, assigned_team=?, reviewed_status='human_reviewed' WHERE ticket_id=?", 
-                         (new_p, new_t, selected_ticket['ticket_id']))
-            conn.commit()
-            conn.close()
-            st.success("Triage Locked!")
-            st.rerun()
+        st.metric("Total Count", len(df[df['priority'].str.lower() == selected_p.lower()]))
 
-    # Footer metrics
-    st.sidebar.divider()
-    st.sidebar.metric("Pending Review", len(df[df['reviewed_status'] == 'pending']))
+    # --- PANE 2: TICKET LIST (Filtered by Pane 1) ---
+    with col_list:
+        st.markdown(f"### 📋 {selected_p} Tickets")
+        list_df = df[df['priority'].str.lower() == selected_p.lower()]
+        
+        if list_df.empty:
+            st.info("No tickets in this category.")
+            selected_id = None
+        else:
+            # Create a clean display string for the list
+            list_df['display_name'] = list_df['ticket_id'].astype(str) + ": " + list_df['subject'].str.slice(0, 30) + "..."
+            
+            # Select individual ticket
+            selected_display = st.radio("Choose Ticket", list_df['display_name'].tolist(), label_visibility="collapsed")
+            selected_id = int(selected_display.split(":")[0])
+
+    # --- PANE 3: THE FOCUS & ACTION AREA ---
+    with col_detail:
+        if selected_id:
+            ticket = df[df['ticket_id'] == selected_id].iloc[0]
+            
+            st.markdown(f"### 📄 Ticket #{ticket['ticket_id']}")
+            st.subheader(ticket['subject'])
+            
+            st.markdown(f"**Description:**")
+            st.info(ticket['description'])
+            
+            with st.status("🤖 AI Analysis Detail", expanded=True):
+                st.write(f"**Reasoning:** {ticket['reasoning']}")
+                st.write(f"**Sentiment:** {ticket['sentiment']}")
+                st.progress(int(ticket['confidence'])/100, text=f"Confidence: {ticket['confidence']}%")
+            
+            st.divider()
+            
+            # Vetting Controls
+            c1, c2, c3 = st.columns(3)
+            
+            priority_options = ["low", "medium", "high", "urgent"]
+            team_options = ["Support", "SRE", "Billing", "Dev", "Security Operations"]
+            
+            new_p = c1.selectbox("Priority", priority_options, index=priority_options.index(ticket['priority'].lower()))
+            
+            curr_t = str(ticket['assigned_team']).strip()
+            t_idx = team_options.index(curr_t) if curr_t in team_options else 0
+            new_t = c2.selectbox("Team", team_options, index=t_idx)
+            
+            if c3.button("✅ Confirm", use_container_width=True):
+                conn = sqlite3.connect(DB_PATH)
+                conn.execute("UPDATE ai_predictions SET priority=?, assigned_team=?, reviewed_status='human_reviewed' WHERE ticket_id=?", 
+                             (new_p, new_t, ticket['ticket_id']))
+                conn.commit()
+                conn.close()
+                st.success("Triage Updated!")
+                st.rerun()
+        else:
+            st.write("Select a ticket to view details.")
