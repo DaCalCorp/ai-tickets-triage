@@ -3,37 +3,46 @@ import sqlite3
 import pandas as pd
 import os
 
-# --- 1. SETUP & BRANDING ---
+# --- 1. SETUP & LIGHT BRANDING ---
 st.set_page_config(page_title="Support Ticket Audit Lab", layout="wide")
 
-# --- 2. HIGH-CONTRAST DARK THEME ---
+# --- 2. CREATIVE UI: ARCTIC GLASS THEME ---
 st.markdown("""
     <style>
-    .stApp { background-color: #0f172a !important; }
-    h1, h2, h3, p, span, label { color: #f8fafc !important; font-weight: 500 !important; }
-    
-    /* Kanban Column Styling */
-    [data-testid="column"] {
-        background-color: #1e293b;
-        padding: 15px;
-        border-radius: 12px;
-        border: 1px solid #334155;
-        min-height: 80vh;
+    /* Light Gradient Background */
+    .stApp {
+        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
     }
     
-    /* Card/Expander Styling */
-    .stExpander {
-        background-color: #0f172a !important;
-        border: 1px solid #3b82f6 !important;
-        margin-bottom: 10px !important;
+    /* Elegant Card Design */
+    .ticket-card {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        margin-bottom: 20px;
     }
+
+    /* Metric Styling */
+    [data-testid="stMetricValue"] {
+        color: #2563eb !important;
+        font-weight: 700;
+    }
+
+    /* Priority Badges */
+    .badge-urgent { background-color: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+    .badge-high { background-color: #ffedd5; color: #9a3412; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+    .badge-medium { background-color: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+    .badge-low { background-color: #f1f5f9; color: #475569; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
     
-    div[data-baseweb="select"] > div { background-color: #0f172a !important; color: #ffffff !important; }
-    [data-testid="stMetricValue"] { color: #38bdf8 !important; }
+    /* Titles */
+    h1, h2, h3 { color: #1e293b !important; font-family: 'Inter', sans-serif; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. DATABASE CONNECTION ---
+# --- 3. DATA CONNECTION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "..", "db", "app.db")
 
@@ -44,43 +53,44 @@ def get_data():
     conn.close()
     return df
 
-st.title("🛡️ Support Ticket Audit Lab")
+st.title("🛡️ Ticket Audit Lab")
+st.markdown("##### *Vetting the Intelligence behind your Support Queue*")
+
 df = get_data()
 
 if df.empty:
-    st.error("❌ No data found. Run 'python3 classifier.py' first.")
+    st.warning("No tickets found. Run the classifier to begin.")
 else:
-    # Top Stats
-    m1, m2, m3 = st.columns(3)
-    m1.metric("Total Tickets", len(df))
-    m2.metric("Pending Audit", len(df[df['reviewed_status'] == 'pending']))
-    m3.metric("Verified", len(df[df['reviewed_status'] == 'human_reviewed']))
+    # 4. SMART FILTERING (The "Creative" touch)
+    # Instead of columns, let's use a Filter Bar at the top
+    col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+    search = col_f1.text_input("🔍 Search Subject or Keywords", "")
+    filter_p = col_f2.multiselect("Filter Priority", ["urgent", "high", "medium", "low"], default=["urgent", "high"])
+    
+    # Filter the Data
+    filtered_df = df[df['priority'].str.lower().isin(filter_p)]
+    if search:
+        filtered_df = filtered_df[filtered_df['subject'].str.contains(search, case=False)]
 
     st.divider()
 
-    # --- 4. KANBAN COLUMNS ---
-    # We define the order we want
-    priorities = ["urgent", "high", "medium", "low"]
-    cols = st.columns(4)
-    
-    priority_options = ["low", "medium", "high", "urgent"]
-    team_options = ["Support", "SRE", "Billing", "Dev", "Security Operations"]
-
-    for i, p_level in enumerate(priorities):
-        with cols[i]:
-            st.markdown(f"### {p_level.upper()}")
-            # Filter data for this specific column
-            subset = df[df['priority'].str.lower() == p_level]
+    # 5. THE CARD FEED
+    for index, row in filtered_df.iterrows():
+        p_class = f"badge-{row['priority'].lower()}"
+        
+        # We use a container to create the "Card" feel
+        with st.container():
+            st.markdown(f"""
+            <div class="ticket-card">
+                <span class="{p_class}">{row['priority'].upper()}</span>
+                <h3 style="margin-top:10px;">{row['subject']}</h3>
+                <p style="color:#475569;">{row['description']}</p>
+            </div>
+            """, unsafe_allow_html=True)
             
-            if subset.empty:
-                st.caption("No tickets in this tier.")
-            
-            for _, row in subset.iterrows():
-                # Card Header
-                with st.expander(f"ID: {row['ticket_id']} | {row['subject'][:30]}..."):
-                    st.markdown(f"**Description:** {row['description']}")
-                    st.divider()
-                    
-                    # Small Vetting Actions inside the Card
-                    new_p = st.selectbox("Priority", priority_options, 
-                                        index=priority_options.index(
+            # Action controls inside an expander for "Clean" look
+            with st.expander("📝 Review AI Triage"):
+                c1, c2, c3 = st.columns(3)
+                
+                new_p = c1.selectbox("Priority", ["low", "medium", "high", "urgent"], 
+                                   index=["low", "medium", "high", "urgent
