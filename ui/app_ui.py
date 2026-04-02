@@ -3,94 +3,116 @@ import sqlite3
 import pandas as pd
 import os
 
-# --- 1. SETUP & LIGHT BRANDING ---
-st.set_page_config(page_title="Support Ticket Audit Lab", layout="wide")
+# --- 1. SETUP & THEME ---
+st.set_page_config(page_title="Audit Command Center", layout="wide")
 
-# --- 2. CREATIVE UI: ARCTIC GLASS THEME ---
 st.markdown("""
     <style>
-    /* Light Gradient Background */
-    .stApp {
-        background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-    }
+    .stApp { background-color: #0d1117; }
     
-    /* Elegant Card Design */
-    .ticket-card {
-        background: rgba(255, 255, 255, 0.7);
-        backdrop-filter: blur(10px);
-        border-radius: 15px;
-        padding: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.5);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        margin-bottom: 20px;
+    /* Panel Containers */
+    .ticket-item {
+        padding: 10px;
+        border-bottom: 1px solid #30363d;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+    .ticket-item:hover { background-color: #161b22; }
+    
+    .active-ticket {
+        background-color: #1f2937 !important;
+        border-left: 4px solid #3b82f6;
     }
 
-    /* Metric Styling */
-    [data-testid="stMetricValue"] {
-        color: #2563eb !important;
-        font-weight: 700;
-    }
-
-    /* Priority Badges */
-    .badge-urgent { background-color: #fee2e2; color: #991b1b; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-    .badge-high { background-color: #ffedd5; color: #9a3412; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-    .badge-medium { background-color: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
-    .badge-low { background-color: #f1f5f9; color: #475569; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+    /* Text Colors */
+    h1, h2, h3, p, span, label { color: #c9d1d9 !important; }
+    .subject-small { font-size: 14px; font-weight: 600; display: block; }
+    .id-small { font-size: 10px; color: #8b949e; }
     
-    /* Titles */
-    h1, h2, h3 { color: #1e293b !important; font-family: 'Inter', sans-serif; }
+    /* Priority Dots */
+    .dot { height: 8px; width: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+    .urgent-dot { background-color: #f85149; }
+    .high-dot { background-color: #f0883e; }
+    .medium-dot { background-color: #d2a8ff; }
+    .low-dot { background-color: #8b949e; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- 3. DATA CONNECTION ---
+# --- 2. DATA CONNECTION ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "..", "db", "app.db")
 
 def get_data():
     if not os.path.exists(DB_PATH): return pd.DataFrame()
     conn = sqlite3.connect(DB_PATH)
-    df = pd.read_sql_query("SELECT * FROM ai_predictions", conn)
+    df = pd.read_sql_query("SELECT * FROM ai_predictions ORDER BY ticket_id DESC", conn)
     conn.close()
     return df
 
-st.title("🛡️ Ticket Audit Lab")
-st.markdown("##### *Vetting the Intelligence behind your Support Queue*")
-
 df = get_data()
 
+# --- 3. THE THREE-PANEL LAYOUT ---
 if df.empty:
-    st.warning("No tickets found. Run the classifier to begin.")
+    st.warning("No data found. Run classifier.py.")
 else:
-    # 4. SMART FILTERING (The "Creative" touch)
-    # Instead of columns, let's use a Filter Bar at the top
-    col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
-    search = col_f1.text_input("🔍 Search Subject or Keywords", "")
-    filter_p = col_f2.multiselect("Filter Priority", ["urgent", "high", "medium", "low"], default=["urgent", "high"])
-    
-    # Filter the Data
-    filtered_df = df[df['priority'].str.lower().isin(filter_p)]
-    if search:
-        filtered_df = filtered_df[filtered_df['subject'].str.contains(search, case=False)]
+    # Sidebar-style Left Panel (Navigation)
+    col_nav, col_content, col_actions = st.columns([1, 2, 1])
 
-    st.divider()
-
-    # 5. THE CARD FEED
-    for index, row in filtered_df.iterrows():
-        p_class = f"badge-{row['priority'].lower()}"
+    with col_nav:
+        st.markdown("### 📥 Queue")
+        search = st.text_input("", placeholder="Search...", label_visibility="collapsed")
         
-        # We use a container to create the "Card" feel
+        # Filtering navigation list
+        nav_df = df[df['subject'].str.contains(search, case=False)] if search else df
+        
+        # Selection Logic (Simulating a click)
+        ticket_list = nav_df['subject'].tolist()
+        selected_subject = st.radio("Select a ticket", ticket_list, label_visibility="collapsed")
+        
+        # Get the full data for the selected ticket
+        selected_ticket = df[df['subject'] == selected_subject].iloc[0]
+
+    with col_content:
+        st.markdown(f"### 📄 Ticket #{selected_ticket['ticket_id']}")
+        st.markdown(f"## {selected_ticket['subject']}")
+        
+        st.info(f"**Description:**\n\n{selected_ticket['description']}")
+        
         with st.container():
-            st.markdown(f"""
-            <div class="ticket-card">
-                <span class="{p_class}">{row['priority'].upper()}</span>
-                <h3 style="margin-top:10px;">{row['subject']}</h3>
-                <p style="color:#475569;">{row['description']}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Action controls inside an expander for "Clean" look
-            with st.expander("📝 Review AI Triage"):
-                c1, c2, c3 = st.columns(3)
-                
-                new_p = c1.selectbox("Priority", ["low", "medium", "high", "urgent"], 
-                                   index=["low", "medium", "high", "urgent
+            st.markdown("#### 🤖 AI Insights")
+            st.write(f"**Sentiment:** {selected_ticket['sentiment']}")
+            st.write(f"**Reasoning:** {selected_ticket['reasoning']}")
+            st.progress(int(selected_ticket['confidence'])/100, text=f"Confidence: {selected_ticket['confidence']}%")
+
+    with col_actions:
+        st.markdown("### 🛠️ Actions")
+        st.write("Review and verify the triage.")
+        
+        priority_options = ["low", "medium", "high", "urgent"]
+        team_options = ["Support", "SRE", "Billing", "Dev", "Security Operations"]
+        
+        # Normalization
+        curr_p = str(selected_ticket['priority']).lower().strip()
+        p_idx = priority_options.index(curr_p) if curr_p in priority_options else 0
+        
+        new_p = st.selectbox("Confirm Priority", priority_options, index=p_idx)
+        
+        curr_t = str(selected_ticket['assigned_team']).strip()
+        t_idx = team_options.index(curr_t) if curr_t in team_options else 0
+        
+        new_t = st.selectbox("Confirm Assignee", team_options, index=t_idx)
+        
+        st.divider()
+        
+        if st.button("✅ Verify & Next", use_container_width=True):
+            conn = sqlite3.connect(DB_PATH)
+            conn.execute("UPDATE ai_predictions SET priority=?, assigned_team=?, reviewed_status='human_reviewed' WHERE ticket_id=?", 
+                         (new_p, new_t, selected_ticket['ticket_id']))
+            conn.commit()
+            conn.close()
+            st.success("Triage Locked!")
+            st.rerun()
+
+    # Footer metrics
+    st.sidebar.divider()
+    st.sidebar.metric("Pending Review", len(df[df['reviewed_status'] == 'pending']))
