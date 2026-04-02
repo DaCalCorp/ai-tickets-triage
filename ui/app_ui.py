@@ -2,63 +2,75 @@ import streamlit as st
 import sqlite3
 import pandas as pd
 
-# Set page config
-st.set_page_config(page_title="AI Ticket Triage", layout="wide")
+# Set Page Config for Branding
+st.set_page_config(page_title="Support Ticket Vetting Lab", layout="wide")
 
-st.title("🛡️ AI Support Ticket Triage & Annotation")
-st.markdown("Review AI classifications and provide human corrections below.")
+# Custom CSS for the "Command Center" look
+st.markdown("""
+    <style>
+    .main { background-color: #0e1117; color: #fafafa; }
+    div[data-testid="stMetricValue"] { color: #00d4ff; }
+    .stExpander { border: 1px solid #262730; border-radius: 10px; margin-bottom: 10px; }
+    </style>
+    """, unsafe_allow_html=True)
 
-# 1. Connect to our Database
-def load_data():
+st.title("🛡️ Support Ticket Vetting Lab")
+st.caption("AI-Powered Triage Audit & Human-in-the-Loop Vetting")
+
+def get_data():
     conn = sqlite3.connect('db/app.db')
-    df = pd.read_sql_query("SELECT * FROM ai_predictions", conn)
+    # Pulling only what we need for the audit
+    query = "SELECT ticket_id, subject, description, priority, category, sentiment, assigned_team, reviewed_status, reasoning FROM ai_predictions"
+    df = pd.read_sql_query(query, conn)
     conn.close()
     return df
 
-try:
-    df = load_data()
+df = get_data()
 
-    # 2. Sidebar Metrics
-    st.sidebar.header("Triage Metrics")
-    st.sidebar.metric("Total Tickets", len(df))
-    st.sidebar.metric("Pending Review", len(df[df['reviewed_status'] == 'pending']))
-    
-    # 3. The Ticket List
-    st.subheader("All AI-Classified Tickets")
-    
-    # We use st.data_editor so you can actually edit the values in the table!
-    edited_df = st.data_editor(
-        df,
-        column_config={
-            "confidence": st.column_config.ProgressColumn(
-                "Confidence", help="AI Confidence Score", min_value=0, max_value=100, format="%d"
-            ),
-            "priority": st.column_config.SelectboxColumn(
-                "Priority", options=["low", "medium", "high", "urgent"]
-            ),
-            "reviewed_status": st.column_config.SelectboxColumn(
-                "Status", options=["pending", "auto_approved", "human_verified"]
-            )
-        },
-        disabled=["ticket_id", "subject", "description"], # Don't let user change the raw ticket
-        hide_index=True,
-    )
+# --- HIGH-LEVEL METRICS ---
+m1, m2, m3, m4 = st.columns(4)
+m1.metric("Total Tickets", len(df))
+m2.metric("Pending Review", len(df[df['reviewed_status'] == 'pending']))
+m3.metric("Auto-Approved", len(df[df['reviewed_status'] == 'auto_approved']))
+m4.metric("Human Vetted", len(df[df['reviewed_status'] == 'human_reviewed']))
 
-    # 4. Save Corrections
-    if st.button("💾 Save Human Corrections"):
-        conn = sqlite3.connect('db/app.db')
-        edited_df.to_sql('ai_predictions', conn, if_exists='replace', index=False)
-        conn.close()
-        st.success("Database updated with human annotations!")
-        st.balloons()
-
-except Exception as e:
-    st.error(f"Could not load database. Did you run the classifier script first? Error: {e}")
-
-# 5. Detail View
 st.divider()
-st.subheader("Deep Dive Reasoning")
-if not df.empty:
-    selected_subject = st.selectbox("Select a ticket to see AI reasoning:", df['subject'])
-    reason = df[df['subject'] == selected_subject]['reasoning'].values[0]
-    st.info(f"**AI Logic:** {reason}")
+
+# --- VETTING QUEUE ---
+st.subheader("🔍 Active Audit Queue")
+st.info("Expand a ticket to review AI reasoning and confirm or adjust the triage.")
+
+for index, row in df.iterrows():
+    # Header logic: Show Priority and Subject
+    header = f"{row['priority'].upper()} | {row['subject']}"
+    
+    with st.expander(header):
+        # Description and Reasoning are the most important context
+        st.write(f"**Customer Message:** {row['description']}")
+        st.write(f"**AI Reasoning:** *{row['reasoning']}*")
+        
+        st.divider()
+        
+        # Action Area
+        c1, c2, c3 = st.columns(3)
+        
+        new_priority = c1.selectbox("Adjust Priority", ["low", "medium", "high", "urgent"], 
+                                   index=["low", "medium", "high", "urgent"].index(row['priority']), 
+                                   key=f"p_{index}")
+        
+        new_team = c2.selectbox("Reassign Team", ["Support", "SRE", "Billing", "Dev", "Security Operations"], 
+                               index=["Support", "SRE", "Billing", "Dev", "Security Operations"].index(row['assigned_team']), 
+                               key=f"t_{index}")
+        
+        # Submit Button
+        if c3.button("Confirm & Vet Ticket", key=f"btn_{index}"):
+            conn = sqlite3.connect('db/app.db')
+            conn.execute("""
+                UPDATE ai_predictions 
+                SET priority = ?, assigned_team = ?, reviewed_status = 'human_reviewed' 
+                WHERE ticket_id = ?
+            """, (new_priority, new_team, row['ticket_id']))
+            conn.commit()
+            conn.close()
+            st.success(f"Ticket #{row['ticket_id']} Vetted!")
+            st.rerun()
